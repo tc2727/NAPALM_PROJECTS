@@ -1,0 +1,56 @@
+ien'''
+This is intened to be a store of functions created as part of ongoing projects. Some values have being replaced by 'xxxx' for security reasons
+'''
+
+
+
+def parse_config(config_str):
+    config_dict = {}
+    lines = config_str.splitlines()
+    stack = [(config_dict, 0)] 
+    for line in lines:
+        stripped_line = line.strip()
+        if not stripped_line or stripped_line.startswith('!'):
+            continue
+        indent_level = len(line) - len(stripped_line)
+        while stack and stack[-1][1] >= indent_level:
+            stack.pop()
+        current_section = stack[-1][0] if stack else config_dict
+        current_section[stripped_line] = {}
+        stack.append((current_section[stripped_line], indent_level))
+    return config_dict
+
+
+"""
+This function will parse a string generated from the Napalm get_config() function and return as a dictionary that can be used to look up key pairs: 
+Data passed to it must be formatted as follows:
+
+device.open()
+info = device.get_config()
+running_config = info['running']
+device.close()
+config_dict = parse_config(running_config)
+
+This returns a properly formatted Python Dict of the running config
+Written by Tim Collins (and ChatGPT) on 06/08/24
+"""
+def find_int_with_DHCP_helper(config_dict):
+    int_with_helper = []
+    def recurse_find(config, current_interface = None):
+        for key, value in config.items():
+            if key.startswith('interface'):
+                current_interface = key
+            if "ip helper-address xxxx" in key:
+                int_with_helper.append(current_interface)
+            if isinstance (value, dict):
+                recurse_find(value, current_interface)
+    recurse_find(config_dict)
+    return int_with_helper
+
+
+"""
+This function will search the dictionary created by the parse_config() function and located any key pairs that start with 'interface' and have
+the ip helpder-address configured with the specified value. The output it the list 'int_with helper' can be used to as a loop to create a config.
+
+Written by Tim Collins (with some help from ChatGPT) on 06/08/24
+"""
