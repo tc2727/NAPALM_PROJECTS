@@ -1,0 +1,68 @@
+"""
+Script to change IP helper addresses on interfaces where its being configured.
+Sequence:
+1. Connects to device.
+2. Pulls down running config
+3. Uses function to convert running config string to a dictionary
+4. Uses function to create list of interfaces with ip helper-address with old DHCP server address configured
+5. Creates config file to remove old DHCP aserver and create new ones based on infloblox 1/2 variables
+6. Runs difference check and requires confirmation before merging with running config
+ 
+This is a test switch targetting CML devices
+Imporvements for live version:
+1. Use dictionary of devices to interate through instead of manual list of entries.
+2. Explicit error handling
+"""
+import pprint
+from napalm import get_network_driver
+from getpass import getpass
+from functions import parse_config, find_int_with_DHCP_helper
+driver = get_network_driver('ios')
+username = input("Enter Username: ")
+password = getpass("Enter Password: ")
+infoblox1 = "8.8.8.8"
+infoblox2 = "9.9.9.10"
+Access1 = driver('xxx', username, password, optional_args={'port': 3001})
+Access2 = driver('xxx', username, password, optional_args={'port': 3002})
+Access3 = driver('xxx', username, password, optional_args={'port': 3003})
+Access4 = driver('xxx', username, password, optional_args={'port': 3004})
+Dist1 = driver('xxx', username, password, optional_args={'port': 3005})
+Dist2 = driver('xxx', username, password, optional_args={'port': 3006})
+FEDEVICES = [Dist1, Dist2]
+for device in FEDEVICES:
+    device.open()
+    info = device.get_config()
+    running_config = info['running']
+    config_dict = parse_config(running_config)
+    int_with_helper = find_int_with_DHCP_helper(config_dict)
+    with open('NAPALM/FAR_EAST/staging.cfg', 'w') as f:
+        for int in int_with_helper:
+            dhcp_config = ("{}\n  no ip helper-address xxxx\n  no ip helper-address xxxx\n  ip helper-address {}\n  ip helper-address {}\n".format(int, infoblox1, infoblox2))
+            f.write(dhcp_config)
+    with open('NAPALM/FAR_EAST/staging.cfg', 'a') as f:
+        f.write("end")
+    print ('Assessing Change!')
+    device.load_merge_candidate("NAPALM/FAR_EAST/staging.cfg")
+    diffs = device.compare_config()
+    if len(diffs) > 0:
+        hostname = device.hostname
+        Warning = "The following configuration will be applied to {}:".format(hostname)
+        print (Warning)
+        print(diffs)
+        Confirm = input ("Type 'Confirm' to commit these changes (any other input will abort): ")
+        if Confirm == str("Confirm"):
+            print ("Committing changes!")
+            device.commit_config()
+            print ("Change Committed!")
+            device.close()
+        else:
+            notapplied = "Config not applied to {}".format(hostname)
+            print (notapplied)
+            device.discard_config()
+            device.close()
+    else:
+        hostname = device.hostname
+        nothingtodo = "No changes detected for {}".format(hostname)
+        print (nothingtodo) 
+        device.discard_config()
+        device.close()    
