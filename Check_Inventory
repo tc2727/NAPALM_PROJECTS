@@ -1,0 +1,60 @@
+"""
+This script checks Dictionary objects of switches and routers and makes sure they match the hostname actually configured on the device. I used this to
+QC a list of devices I was given as I was aware some of the hostnames had changed. This also creates and explicit error if a SSH connection error occurs.
+The Switches and Routers Dictionaries check can now be used for further scripting with confidence
+"""
+
+
+from getpass import getpass
+from napalm import get_network_driver
+import paramiko
+from netmiko import ConnectHandler, NetmikoAuthenticationException
+username = input("Enter Username: ")
+password = getpass("Enter Password: ")
+from NON_SDA_INVENTORY import switches, routers
+for device, detail in routers.items():
+    inventory_name = device
+    try:
+        hostname = detail['hostname']
+        print ("Checking {}".format(inventory_name))
+        driver = get_network_driver('ios')
+        switch = driver(hostname, username, password)
+        switch.open()
+        info = switch.get_facts()
+        actual_name = (info['hostname'])
+        if actual_name != inventory_name:
+            with open("checkinventory.txt", "a") as f:
+                f.write("The config name {} DOES NOT MATCH the stored name {}\n".format(actual_name, inventory_name))
+        switch.close()
+    except paramiko.ssh_exception.AuthenticationException as auth_err:
+        print ("SSH error {}".format(inventory_name))
+        with open("checkinventory.txt", "a") as f:
+                f.write("Unable to establish SSH session to {}\n".format(inventory_name))
+        continue 
+    except paramiko.ssh_exception.AuthenticationException as auth_err:
+        with open("checkinventory.txt", "a") as f:
+                f.write("Unable to establish SSH session to {}\n".format(inventory_name))
+        continue 
+for device, detail in switches.items():
+    inventory_name = device
+    try:
+        hostname = detail['hostname']
+        print ("Checking {}".format(inventory_name))
+        driver = get_network_driver('ios')
+        switch = driver(hostname, username, password)
+        switch.open()
+        info = switch.get_facts()
+        actual_name = (info['hostname'])
+        if actual_name != inventory_name:
+            with open("checkinventory.txt", "a") as f:
+                f.write("The config name {} DOES NOT MATCH the stored name {}\n".format(actual_name, inventory_name))
+        switch.close()
+    except paramiko.ssh_exception.AuthenticationException as auth_err:
+        print ("SSH error {}".format(inventory_name))
+        with open("checkinventory.txt", "a") as f:
+                f.write("Unable to establish SSH session to {}\n".format(inventory_name))
+        continue 
+    except paramiko.ssh_exception.AuthenticationException as auth_err:
+        with open("checkinventory.txt", "a") as f:
+                f.write("Unable to establish SSH session to {}\n".format(inventory_name))
+        continue 
