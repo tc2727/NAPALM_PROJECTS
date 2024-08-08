@@ -12,6 +12,8 @@ This is a test switch targetting CML devices
 Imporvements for live version:
 1. Use dictionary of devices to interate through instead of manual list of entries.
 2. Explicit error handling
+
+IP addresses replqced with 'xxxx' for security reasons
 """
 import pprint
 from napalm import get_network_driver
