@@ -1,0 +1,80 @@
+"""
+Script to remove Flexible Netflow Configuration from IOS-XE switches and routers. Uses functions included in this repository. 
+Some details changed to 'server' for security reasons. Challenge was was to get for statements in right order to build config file 
+that could be applied in a valid manner (Interface config had to be changed first, then the flow monitor, and then the record and exporter).
+Pleased with diff and confirmation process - will probaly keep re-using.
+"""
+
+
+from getpass import getpass
+from napalm import get_network_driver
+import paramiko
+from netmiko import ConnectHandler, NetmikoAuthenticationException
+from functions import parse_config, find_int_with_stealthflow
+username = input("Enter Username: ")
+password = getpass("Enter Password: ")
+from NON_SDA_INVENTORY import swswitches
+for device, detail in swswitches.items():
+    inventory_name = device
+    configfile = "{}.cfg".format(inventory_name)
+    hostname = detail['hostname']
+    driver = get_network_driver('ios')
+    switch = driver(hostname, username, password)
+    switch.open()
+    info = switch.get_config()
+    running_config = info["running"]
+    config_dict = parse_config(running_config)
+    print ("Checking {} for Stealthwatch configuration".format(inventory_name))
+    int_with_stealthflow = find_int_with_stealthflow(config_dict)  
+    for int in int_with_stealthflow:
+                print ("Found flow record configured for Stealthwatch on {}".format(int))
+                with open (configfile, "a") as f:
+                    f.write("{}\n  no ip flow monitor MONITOR-to-STEALTHWATCH input\n".format(int))
+    for key, value in config_dict.items():
+        if  "MONITOR-to-STEALTHWATCH" in key:
+            print ("Stealthwatch Config {} found!".format(key))
+            with open (configfile, "a") as f:
+                    f.write("no {}\n".format(key))
+    for key, value in config_dict.items():               
+        if  "FLOW01-to-Server" in key:
+            print ("Stealthwatch Config {} found!".format(key))
+            with open (configfile, "a") as f:
+                    f.write("no {}\n".format(key))
+        elif  "FLOW02-to-server" in key:
+            print ("Stealthwatch Config {} found!".format(key))
+            with open (configfile, "a") as f:
+                    f.write("no {}\n".format(key))           
+        elif "collector-server" in key:
+            print ("Stealthwatch Config {} found!".format(key))
+            with open (configfile, "a") as f:
+                f.write("no {}\n".format(key))
+        elif "collector-Server" in key:
+            print ("Stealthwatch Config {} found!".format(key))
+            with open (configfile, "a") as f:
+                    f.write("no {}\n".format(key))     
+    with open (configfile, "a") as f:
+                f.write("\nend")            
+    switch.load_merge_candidate(configfile)
+    diffs = switch.compare_config()
+    if len(diffs) > 0:
+        hostname = inventory_name
+        Warning = "The following configuration will be applied to {}:".format(hostname)
+        print (Warning)
+        print(diffs)
+        Confirm = input ("Type 'Confirm' to commit these changes (any other input will abort): ")
+        if Confirm == str("Confirm"):
+            print ("Committing changes!")
+            switch.commit_config()
+            print ("Change Committed!")
+            switch.close()
+        else:
+            notapplied = "Config not applied to {}".format(hostname)
+            print (notapplied)
+            switch.discard_config()
+            switch.close()
+    else:
+        hostname = inventory_name
+        nothingtodo = "No changes detected for {}".format(hostname)
+        print (nothingtodo) 
+        switch.discard_config()
+        switch.close()               
