@@ -1,0 +1,50 @@
+"""
+In order to make Napalm changes with the advanced diffs feature I needed to enable SCP on multiple devices. Used Netmiko with 'send.command' function.
+Difficult to get syntax correct for commands and needed some help from ChatGPT.
+Pleased with except explicit errors.
+"""
+
+
+from getpass import getpass
+from napalm import get_network_driver
+import paramiko
+from netmiko import ConnectHandler, NetmikoAuthenticationException, NetmikoTimeoutException
+username = input("Enter Username: ")
+password = getpass("Enter Password: ")
+from NON_SDA_INVENTORY import SWdevices
+for device, detail in SWdevices.items():
+    try:
+        inventory_name = device
+        hostname = detail['hostname']
+        driver = get_network_driver('ios')
+        switch = driver(hostname, username, password)
+        netmiko_device = {'device_type': 'cisco_ios', 'host': hostname, 'username': username, 'password': password}
+        net_connect = ConnectHandler(**netmiko_device)
+        net_connect.enable()
+        output = net_connect.send_command('configure terminal', expect_string=r'\(config\)#')
+        output += net_connect.send_command('ip scp server enable', expect_string=r'\(config\)#')
+        output += net_connect.send_command('end', expect_string=r'#')
+        print ("SCP enabled on {}".format(inventory_name))
+        output += net_connect.send_command('write memory', expect_string=r'#')
+        print ("Saved to startup config")
+        if 'confirm' in output.lower():
+            output += net_connect.send_command('\n')
+    except NetmikoTimeoutException:
+        inventory_name = device
+        print("Error: TCP connection to {} failed. Check IP is correct:".format(inventory_name))
+        with open("error.txt", "a") as f:
+            f.write("Error: TCP connection to {} failed. Check IP is correct.\n".format(inventory_name))
+        continue
+    except NetmikoAuthenticationException:
+        inventory_name = device
+        print("Error: Authentication to {} failed. Please check your username and password.".format(inventory_name))
+        with open("error.txt", "a") as f:
+            f.write("Error: Authentication to {} failed. Please check your username and password.\n".format(inventory_name))
+        continue
+    except Exception as e:
+        inventory_name = device
+        print("An unexpected error occurred when connecting to {}: {}".format(inventory_name, e))
+        with open("error.txt", "a") as f:
+            f.write("An unexpected error occurred when connecting to {}: {}\n".format(inventory_name, e))
+        continue
+    switch.close()
